@@ -7,9 +7,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/aniket_jhariya/structura/api"
-	"github.com/aniket_jhariya/structura/config"
-	"github.com/aniket_jhariya/structura/filehandler"
+	"github.com/Abiggj/structura/api"
+	"github.com/Abiggj/structura/config"
+	"github.com/Abiggj/structura/filehandler"
 	"github.com/charmbracelet/bubbles/progress"
 	"github.com/charmbracelet/bubbles/spinner"
 	"github.com/charmbracelet/bubbletea"
