@@ -170,18 +170,43 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		case StateEnterInputDir:
 			if msg.Type == tea.KeyEnter {
-				if _, err := os.Stat(m.inputDir); os.IsNotExist(err) {
-					m.errors = append(m.errors, fmt.Sprintf("Directory does not exist: %s", m.inputDir))
+				// Clean and normalize the path
+				cleanPath := filepath.Clean(m.inputDir)
+				m.inputDir = cleanPath
+				
+				// Check if directory exists
+				info, err := os.Stat(m.inputDir)
+				if err != nil {
+					m.errors = append(m.errors, fmt.Sprintf("Error accessing directory: %s", err))
 					return m, nil
 				}
+				
+				if !info.IsDir() {
+					m.errors = append(m.errors, fmt.Sprintf("Path is not a directory: %s", m.inputDir))
+					return m, nil
+				}
+				
 				m.state = StateEnterOutputDir
 				return m, nil
 			}
-			m.inputDir += string(msg.Runes)
+			
+			// Handle backspace
+			if msg.Type == tea.KeyBackspace && len(m.inputDir) > 0 {
+				m.inputDir = m.inputDir[:len(m.inputDir)-1]
+				return m, nil
+			}
+			
+			if msg.Type == tea.KeyRunes {
+				m.inputDir += string(msg.Runes)
+			}
 			return m, nil
 
 		case StateEnterOutputDir:
 			if msg.Type == tea.KeyEnter {
+				// Clean the path
+				cleanPath := filepath.Clean(m.outputDir)
+				m.outputDir = cleanPath
+				
 				// Create output directory if it doesn't exist
 				if err := os.MkdirAll(m.outputDir, 0755); err != nil {
 					m.errors = append(m.errors, fmt.Sprintf("Failed to create output directory: %s", err))
@@ -195,7 +220,16 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					m.spinner.Tick,
 				)
 			}
-			m.outputDir += string(msg.Runes)
+			
+			// Handle backspace
+			if msg.Type == tea.KeyBackspace && len(m.outputDir) > 0 {
+				m.outputDir = m.outputDir[:len(m.outputDir)-1]
+				return m, nil
+			}
+			
+			if msg.Type == tea.KeyRunes {
+				m.outputDir += string(msg.Runes)
+			}
 			return m, nil
 		}
 

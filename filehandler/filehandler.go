@@ -1,6 +1,7 @@
 package filehandler
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -116,7 +117,20 @@ func (fh *FileHandler) ShouldIgnore(path string) bool {
 func (fh *FileHandler) TraverseDirectory(rootDir string) ([]FileInfo, error) {
 	var files []FileInfo
 
-	err := filepath.Walk(rootDir, func(path string, info os.FileInfo, err error) error {
+	// Clean and normalize the path for cross-platform compatibility
+	rootDir = filepath.Clean(rootDir)
+	
+	// Check if directory exists before walking
+	info, err := os.Stat(rootDir)
+	if err != nil {
+		return nil, fmt.Errorf("error accessing directory: %w", err)
+	}
+	
+	if !info.IsDir() {
+		return nil, fmt.Errorf("path is not a directory: %s", rootDir)
+	}
+
+	err = filepath.Walk(rootDir, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
 			return err
 		}
