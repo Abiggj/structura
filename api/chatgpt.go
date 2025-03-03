@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"github.com/Abiggj/structura/config"
 	"github.com/Abiggj/structura/filehandler"
+	"github.com/Abiggj/structura/types"
 	"github.com/go-resty/resty/v2"
 	"time"
 )
@@ -88,7 +89,7 @@ func (cc *ChatGPTClient) makeAPIRequest(req interface{}) (*resty.Response, error
 			}
 
 			// Handle API-level errors
-			apiErr := &APIError{
+			apiErr := &types.APIError{
 				StatusCode: resp.StatusCode(),
 				RawResponse: resp.String(),
 			}
@@ -115,7 +116,7 @@ func (cc *ChatGPTClient) makeAPIRequest(req interface{}) (*resty.Response, error
 			}
 		} else {
 			// Handle network errors
-			lastErr = &APIError{
+			lastErr = &types.APIError{
 				Message: fmt.Sprintf("API request failed: %v", err),
 				IsNetworkError: true,
 			}
@@ -171,7 +172,7 @@ func (cc *ChatGPTClient) GenerateDocumentation(file filehandler.FileInfo) (strin
 
 	// Create the request
 	req := ChatGPTRequest{
-		Model: cc.Config.OpenAIModel,
+		Model: cc.Config.APIModel,
 		Messages: []ChatGPTMessage{
 			{
 				Role:    "user",
@@ -184,7 +185,7 @@ func (cc *ChatGPTClient) GenerateDocumentation(file filehandler.FileInfo) (strin
 	resp, err := cc.makeAPIRequest(req)
 	if err != nil {
 		// Provide more user-friendly errors based on error type
-		if apiErr, ok := err.(*APIError); ok {
+		if apiErr, ok := err.(*types.APIError); ok {
 			if apiErr.IsInvalidKey {
 				return "", errors.New("Invalid API key or authentication error. Please check your API key")
 			}

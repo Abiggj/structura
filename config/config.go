@@ -1,14 +1,14 @@
 package config
 
 import (
-	"github.com/Abiggj/structura/api"
+	"github.com/Abiggj/structura/types"
 	"time"
 )
 
 // Config holds the application configuration
 type Config struct {
 	// API Configuration
-	APIType        api.APIType
+	APIType        types.APIType
 	APIModel       string
 	DeepseekAPIKey string
 	OpenAIAPIKey   string
@@ -29,7 +29,7 @@ type Config struct {
 func NewConfig() *Config {
 	return &Config{
 		// Default API settings
-		APIType:        api.APITypeDeepseek,
+		APIType:        types.APITypeDeepseek,
 		APIModel:       "deepseek-chat",
 		DeepseekAPIKey: "",
 		OpenAIAPIKey:   "",
@@ -50,9 +50,9 @@ func NewConfig() *Config {
 // GetActiveEndpoint returns the API endpoint for the currently selected API type
 func (c *Config) GetActiveEndpoint() string {
 	switch c.APIType {
-	case api.APITypeChatGPT:
+	case types.APITypeChatGPT:
 		return c.OpenAIEndpoint
-	case api.APITypeGemini:
+	case types.APITypeGemini:
 		return c.GeminiEndpoint
 	default:
 		return c.DeepseekEndpoint
@@ -62,9 +62,9 @@ func (c *Config) GetActiveEndpoint() string {
 // GetActiveAPIKey returns the API key for the currently selected API type
 func (c *Config) GetActiveAPIKey() string {
 	switch c.APIType {
-	case api.APITypeChatGPT:
+	case types.APITypeChatGPT:
 		return c.OpenAIAPIKey
-	case api.APITypeGemini:
+	case types.APITypeGemini:
 		return c.GeminiAPIKey
 	default:
 		return c.DeepseekAPIKey

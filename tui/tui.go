@@ -9,6 +9,7 @@ import (
 	"github.com/Abiggj/structura/api"
 	"github.com/Abiggj/structura/config"
 	"github.com/Abiggj/structura/filehandler"
+	"github.com/Abiggj/structura/types"
 	"github.com/charmbracelet/bubbles/progress"
 	"github.com/charmbracelet/bubbles/spinner"
 	"github.com/charmbracelet/bubbletea"
@@ -55,7 +56,7 @@ type Model struct {
 	apiKey        string
 	
 	// API Selection
-	apiTypes        []api.APIType
+	apiTypes        []types.APIType
 	selectedAPIType int
 	apiModels       []string
 	selectedModel   int
@@ -120,7 +121,7 @@ func NewModel() Model {
 	}
 	
 	// Set up API types
-	apiTypes := api.APITypes()
+	apiTypes := types.APITypes()
 	
 	// Get current working directory for initial directory navigation
 	cwd, err := os.Getwd()
@@ -142,7 +143,7 @@ func NewModel() Model {
 		selectedType:    0,
 		apiTypes:        apiTypes,
 		selectedAPIType: 0,
-		apiModels:       api.APIModelMap[apiTypes[0]], // Default to first API type models
+		apiModels:       types.APIModelMap[apiTypes[0]], // Default to first API type models
 		selectedModel:   0,
 		inputDir:        cwd,
 		dirHistory:      []string{cwd},
@@ -175,7 +176,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				if m.selectedAPIType > 0 {
 					m.selectedAPIType--
 					// Update available models when API type changes
-					m.apiModels = api.APIModelMap[m.apiTypes[m.selectedAPIType]]
+					m.apiModels = types.APIModelMap[m.apiTypes[m.selectedAPIType]]
 					m.selectedModel = 0
 				}
 				return m, nil
@@ -183,7 +184,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				if m.selectedAPIType < len(m.apiTypes)-1 {
 					m.selectedAPIType++
 					// Update available models when API type changes
-					m.apiModels = api.APIModelMap[m.apiTypes[m.selectedAPIType]]
+					m.apiModels = types.APIModelMap[m.apiTypes[m.selectedAPIType]]
 					m.selectedModel = 0
 				}
 				return m, nil
@@ -217,9 +218,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if msg.Type == tea.KeyEnter {
 				// Set the appropriate API key based on the selected API type
 				switch m.config.APIType {
-				case api.APITypeChatGPT:
+				case types.APITypeChatGPT:
 					m.config.OpenAIAPIKey = m.apiKey
-				case api.APITypeGemini:
+				case types.APITypeGemini:
 					m.config.GeminiAPIKey = m.apiKey
 				default:
 					m.config.DeepseekAPIKey = m.apiKey

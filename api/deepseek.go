@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"github.com/Abiggj/structura/config"
 	"github.com/Abiggj/structura/filehandler"
+	"github.com/Abiggj/structura/types"
 	"github.com/go-resty/resty/v2"
 	"time"
 )
@@ -57,20 +58,6 @@ func NewDeepseekClient(cfg *config.Config) *DeepseekClient {
 	}
 }
 
-// APIError represents a structured API error
-type APIError struct {
-	StatusCode int
-	Message    string
-	IsRateLimit bool
-	IsInvalidKey bool
-	IsNetworkError bool
-	RawResponse string
-}
-
-func (e *APIError) Error() string {
-	return e.Message
-}
-
 // enforceRateLimit ensures the API rate limit is respected
 func (dc *DeepseekClient) enforceRateLimit() {
 	elapsed := time.Since(dc.lastAPICall)
@@ -102,7 +89,7 @@ func (dc *DeepseekClient) makeAPIRequest(req interface{}) (*resty.Response, erro
 			}
 
 			// Handle API-level errors
-			apiErr := &APIError{
+			apiErr := &types.APIError{
 				StatusCode: resp.StatusCode(),
 				RawResponse: resp.String(),
 			}
@@ -129,7 +116,7 @@ func (dc *DeepseekClient) makeAPIRequest(req interface{}) (*resty.Response, erro
 			}
 		} else {
 			// Handle network errors
-			lastErr = &APIError{
+			lastErr = &types.APIError{
 				Message: fmt.Sprintf("API request failed: %v", err),
 				IsNetworkError: true,
 			}
@@ -198,7 +185,7 @@ func (dc *DeepseekClient) GenerateDocumentation(file filehandler.FileInfo) (stri
 	resp, err := dc.makeAPIRequest(req)
 	if err != nil {
 		// Provide more user-friendly errors based on error type
-		if apiErr, ok := err.(*APIError); ok {
+		if apiErr, ok := err.(*types.APIError); ok {
 			if apiErr.IsInvalidKey {
 				return "", errors.New("Invalid API key or authentication error. Please check your API key")
 			}
