@@ -11,7 +11,7 @@ type Config struct {
 func NewConfig() *Config {
 	return &Config{
 		DeepseekAPIKey: "", // Set this from environment variable or config file
-		APIEndpoint:    "https://api.deepseek.com/v1/chat/completions",
+		APIEndpoint:    "https://api.deepseek.io/v1/chat/completions", // Updated to correct endpoint
 		FileHandler:    nil,
 	}
 }
