@@ -43,7 +43,9 @@ func NewFileHandler() *FileHandler {
 	return &FileHandler{
 		IgnoreDirs: []string{
 			".git", "node_modules", "vendor", "dist", "build",
-			".idea", ".vscode", ".github", ".cache",
+			".idea", ".vscode", ".github", ".cache", ".svn",
+			".hg", ".bzr", "CVS", "__pycache__", ".sass-cache",
+			".next", ".nuxt", ".output", "out", ".parcel-cache",
 		},
 		IgnoreFiles: []string{
 			".DS_Store", "*.lock", "*.log", "*.wasm", "*.min.js",
@@ -51,6 +53,11 @@ func NewFileHandler() *FileHandler {
 			"*.jpeg", "*.gif", "*.webp", "*.ttf", "*.woff", "*.woff2",
 			".env", "*.env", ".env.*", "*.yml", "*.yaml", "*.toml", "*.ini",
 			"*.config", "*.conf", "Dockerfile", "docker-compose.yml",
+			".gitignore", ".gitattributes", ".gitmodules", ".gitkeep",
+			".npmrc", ".npmignore", ".eslintignore", ".prettierignore",
+			".dockerignore", ".editorconfig", "thumbs.db", ".htaccess", 
+			"*.swp", "*.swo", "*.bak", "*.tmp", "*.temp", "*.o", "*.obj",
+			"*.suo", "*.user", "*.userosscache", "*.dbmdl", 
 		},
 		ProjectType: ProjectTypeGeneric,
 	}
@@ -63,7 +70,9 @@ func (fh *FileHandler) SetProjectType(projectType ProjectType) {
 	// Reset to default ignore rules first
 	fh.IgnoreDirs = []string{
 		".git", "node_modules", "vendor", "dist", "build",
-		".idea", ".vscode", ".github", ".cache",
+		".idea", ".vscode", ".github", ".cache", ".svn",
+		".hg", ".bzr", "CVS", "__pycache__", ".sass-cache",
+		".next", ".nuxt", ".output", "out", ".parcel-cache",
 	}
 	fh.IgnoreFiles = []string{
 		".DS_Store", "*.lock", "*.log", "*.wasm", "*.min.js",
@@ -71,6 +80,11 @@ func (fh *FileHandler) SetProjectType(projectType ProjectType) {
 		"*.jpeg", "*.gif", "*.webp", "*.ttf", "*.woff", "*.woff2",
 		".env", "*.env", ".env.*", "*.yml", "*.yaml", "*.toml", "*.ini",
 		"*.config", "*.conf", "Dockerfile", "docker-compose.yml",
+		".gitignore", ".gitattributes", ".gitmodules", ".gitkeep",
+		".npmrc", ".npmignore", ".eslintignore", ".prettierignore",
+		".dockerignore", ".editorconfig", "thumbs.db", ".htaccess", 
+		"*.swp", "*.swo", "*.bak", "*.tmp", "*.temp", "*.o", "*.obj",
+		"*.suo", "*.user", "*.userosscache", "*.dbmdl",
 	}
 	
 	// Add project-specific ignore rules
