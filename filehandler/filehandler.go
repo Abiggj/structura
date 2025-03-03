@@ -58,6 +58,7 @@ func NewFileHandler() *FileHandler {
 			".dockerignore", ".editorconfig", "thumbs.db", ".htaccess", 
 			"*.swp", "*.swo", "*.bak", "*.tmp", "*.temp", "*.o", "*.obj",
 			"*.suo", "*.user", "*.userosscache", "*.dbmdl", 
+			"*.sh", "*README*", "*readme*",
 		},
 		ProjectType: ProjectTypeGeneric,
 	}
@@ -85,6 +86,7 @@ func (fh *FileHandler) SetProjectType(projectType ProjectType) {
 		".dockerignore", ".editorconfig", "thumbs.db", ".htaccess", 
 		"*.swp", "*.swo", "*.bak", "*.tmp", "*.temp", "*.o", "*.obj",
 		"*.suo", "*.user", "*.userosscache", "*.dbmdl",
+		"*.sh", "*README*", "*readme*",
 	}
 	
 	// Add project-specific ignore rules
