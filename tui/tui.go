@@ -5,7 +5,6 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
-	"time"
 
 	"github.com/Abiggj/structura/api"
 	"github.com/Abiggj/structura/config"
