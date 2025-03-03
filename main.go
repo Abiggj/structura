@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/aniket_jhariya/structura/tui"
+	"github.com/Abiggj/structura/tui"
 	tea "github.com/charmbracelet/bubbletea"
 )
 
