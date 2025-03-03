@@ -48,14 +48,29 @@ var (
 type Model struct {
 	config        *config.Config
 	fileHandler   *filehandler.FileHandler
-	apiClient     *api.DeepseekClient
+	apiClient     api.DocumentationClient
 	state         State
 	inputDir      string
 	outputDir     string
 	apiKey        string
+	
+	// API Selection
+	apiTypes        []api.APIType
+	selectedAPIType int
+	apiModels       []string
+	selectedModel   int
+	
+	// Project type selection
 	projectType   filehandler.ProjectType
 	projectTypes  []filehandler.ProjectType
 	selectedType  int
+	
+	// Directory Selection
+	dirEntries     []os.DirEntry
+	selectedDir    int
+	dirHistory     []string // For navigation history
+	
+	// Processing
 	files         []filehandler.FileInfo
 	processedFiles int
 	currentFile   string
@@ -71,9 +86,12 @@ type State int
 
 const (
 	StateInit State = iota
+	StateSelectAPIType
+	StateSelectAPIModel
 	StateEnterAPIKey
 	StateSelectProjectType
-	StateEnterInputDir
+	StateSelectInputDir
+	StateEnterInputDir  // Fallback if selecting fails
 	StateEnterOutputDir
 	StateProcessing
 	StateDone
@@ -100,16 +118,34 @@ func NewModel() Model {
 		filehandler.ProjectTypeRails,
 		filehandler.ProjectTypeFlutter,
 	}
-
+	
+	// Set up API types
+	apiTypes := api.APITypes()
+	
+	// Get current working directory for initial directory navigation
+	cwd, err := os.Getwd()
+	if err != nil {
+		cwd = "/"
+	}
+	
+	// Create initial config
+	cfg := config.NewConfig()
+	
 	return Model{
-		config:       config.NewConfig(),
-		fileHandler:  filehandler.NewFileHandler(),
-		state:        StateInit,
-		spinner:      s,
-		progress:     p,
-		projectTypes: projectTypes,
-		projectType:  filehandler.ProjectTypeGeneric,
-		selectedType: 0,
+		config:          cfg,
+		fileHandler:     filehandler.NewFileHandler(),
+		state:           StateInit,
+		spinner:         s,
+		progress:        p,
+		projectTypes:    projectTypes,
+		projectType:     filehandler.ProjectTypeGeneric,
+		selectedType:    0,
+		apiTypes:        apiTypes,
+		selectedAPIType: 0,
+		apiModels:       api.APIModelMap[apiTypes[0]], // Default to first API type models
+		selectedModel:   0,
+		inputDir:        cwd,
+		dirHistory:      []string{cwd},
 	}
 }
 
@@ -130,17 +166,86 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// Handle different states
 		switch m.state {
 		case StateInit:
-			m.state = StateEnterAPIKey
+			m.state = StateSelectAPIType
+			return m, nil
+			
+		case StateSelectAPIType:
+			switch msg.String() {
+			case "up", "k":
+				if m.selectedAPIType > 0 {
+					m.selectedAPIType--
+					// Update available models when API type changes
+					m.apiModels = api.APIModelMap[m.apiTypes[m.selectedAPIType]]
+					m.selectedModel = 0
+				}
+				return m, nil
+			case "down", "j":
+				if m.selectedAPIType < len(m.apiTypes)-1 {
+					m.selectedAPIType++
+					// Update available models when API type changes
+					m.apiModels = api.APIModelMap[m.apiTypes[m.selectedAPIType]]
+					m.selectedModel = 0
+				}
+				return m, nil
+			case "enter":
+				m.config.APIType = m.apiTypes[m.selectedAPIType]
+				m.state = StateSelectAPIModel
+				return m, nil
+			}
+			return m, nil
+			
+		case StateSelectAPIModel:
+			switch msg.String() {
+			case "up", "k":
+				if m.selectedModel > 0 {
+					m.selectedModel--
+				}
+				return m, nil
+			case "down", "j":
+				if m.selectedModel < len(m.apiModels)-1 {
+					m.selectedModel++
+				}
+				return m, nil
+			case "enter":
+				m.config.APIModel = m.apiModels[m.selectedModel]
+				m.state = StateEnterAPIKey
+				return m, nil
+			}
 			return m, nil
 
 		case StateEnterAPIKey:
 			if msg.Type == tea.KeyEnter {
-				m.config.DeepseekAPIKey = m.apiKey
-				m.apiClient = api.NewDeepseekClient(m.config)
+				// Set the appropriate API key based on the selected API type
+				switch m.config.APIType {
+				case api.APITypeChatGPT:
+					m.config.OpenAIAPIKey = m.apiKey
+				case api.APITypeGemini:
+					m.config.GeminiAPIKey = m.apiKey
+				default:
+					m.config.DeepseekAPIKey = m.apiKey
+				}
+				
+				// Create the appropriate API client
+				var err error
+				m.apiClient, err = api.CreateDocumentationClient(m.config)
+				if err != nil {
+					m.errors = append(m.errors, fmt.Sprintf("Error creating API client: %s", err))
+					return m, nil
+				}
+				
 				m.state = StateSelectProjectType
 				return m, nil
 			}
-			m.apiKey += string(msg.Runes)
+			
+			// Handle backspace
+			if msg.Type == tea.KeyBackspace && len(m.apiKey) > 0 {
+				m.apiKey = m.apiKey[:len(m.apiKey)-1]
+				return m, nil
+			}
+			
+			if msg.Type == tea.KeyRunes {
+				m.apiKey += string(msg.Runes)
+			}
 			return m, nil
 			
 		case StateSelectProjectType:
@@ -162,6 +267,59 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				// Store the fileHandler in the config for the API client to access
 				m.config.FileHandler = m.fileHandler
 				
+				// Load the directory entries for input directory selection
+				if err := m.loadDirectoryEntries(m.inputDir); err != nil {
+					m.errors = append(m.errors, fmt.Sprintf("Error loading directory: %s", err))
+					m.state = StateEnterInputDir // Fallback to manual entry
+				} else {
+					m.state = StateSelectInputDir
+				}
+				return m, nil
+			}
+			return m, nil
+			
+		case StateSelectInputDir:
+			switch msg.String() {
+			case "up", "k":
+				if m.selectedDir > 0 {
+					m.selectedDir--
+				}
+				return m, nil
+			case "down", "j":
+				if m.selectedDir < len(m.dirEntries)-1 {
+					m.selectedDir++
+				}
+				return m, nil
+			case "enter":
+				// If a directory is selected, navigate into it
+				if m.selectedDir < len(m.dirEntries) && m.dirEntries[m.selectedDir].IsDir() {
+					entry := m.dirEntries[m.selectedDir]
+					
+					if entry.Name() == ".." {
+						// Go up one directory
+						if len(m.dirHistory) > 1 {
+							m.dirHistory = m.dirHistory[:len(m.dirHistory)-1]
+							m.inputDir = m.dirHistory[len(m.dirHistory)-1]
+						}
+					} else {
+						// Go into the selected directory
+						newPath := filepath.Join(m.inputDir, entry.Name())
+						m.inputDir = newPath
+						m.dirHistory = append(m.dirHistory, newPath)
+					}
+					
+					// Reload directory entries
+					if err := m.loadDirectoryEntries(m.inputDir); err != nil {
+						m.errors = append(m.errors, fmt.Sprintf("Error loading directory: %s", err))
+					}
+					return m, nil
+				} else {
+					// If not a directory, confirm this directory as the input dir
+					m.state = StateEnterOutputDir
+				}
+				return m, nil
+			case "escape":
+				// Switch to manual entry mode
 				m.state = StateEnterInputDir
 				return m, nil
 			}
@@ -297,14 +455,52 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 // View renders the current state of the application
 func (m Model) View() string {
+	title := "Structura - Documentation Generator"
+	
 	switch m.state {
 	case StateInit:
-		return titleStyle.Render("Structura - DeepSeek Documentation Generator") + "\n\n" +
+		return titleStyle.Render(title) + "\n\n" +
 			"Press any key to start"
 			
+	case StateSelectAPIType:
+		var options string
+		for i, apiType := range m.apiTypes {
+			option := string(apiType)
+			if i == m.selectedAPIType {
+				options += selectedStyle.Render("› " + option) + "\n"
+			} else {
+				options += "  " + option + "\n"
+			}
+		}
+		
+		return titleStyle.Render(title) + "\n\n" +
+			"Select API type (use arrow keys and enter):\n\n" +
+			options + "\n" +
+			renderErrors(m.errors)
+	
+	case StateSelectAPIModel:
+		var options string
+		for i, model := range m.apiModels {
+			if i == m.selectedModel {
+				options += selectedStyle.Render("› " + model) + "\n"
+			} else {
+				options += "  " + model + "\n"
+			}
+		}
+		
+		apiTypeStr := string(m.config.APIType)
+		return titleStyle.Render(title) + "\n\n" +
+			fmt.Sprintf("Selected API: %s\n\n", apiTypeStr) +
+			"Select model (use arrow keys and enter):\n\n" +
+			options + "\n" +
+			renderErrors(m.errors)
+			
 	case StateEnterAPIKey:
-		return titleStyle.Render("Structura - DeepSeek Documentation Generator") + "\n\n" +
-			"Enter your DeepSeek API Key: " + strings.Repeat("*", len(m.apiKey)) + "\n\n" +
+		apiTypeStr := string(m.config.APIType)
+		return titleStyle.Render(title) + "\n\n" +
+			fmt.Sprintf("Selected API: %s\n", apiTypeStr) + 
+			fmt.Sprintf("Selected model: %s\n\n", m.config.APIModel) +
+			fmt.Sprintf("Enter your %s API Key: %s\n\n", apiTypeStr, strings.Repeat("*", len(m.apiKey))) +
 			renderErrors(m.errors)
 			
 	case StateSelectProjectType:
@@ -318,25 +514,83 @@ func (m Model) View() string {
 			}
 		}
 		
-		return titleStyle.Render("Structura - DeepSeek Documentation Generator") + "\n\n" +
+		apiTypeStr := string(m.config.APIType)
+		return titleStyle.Render(title) + "\n\n" +
+			fmt.Sprintf("Using: %s / %s\n\n", apiTypeStr, m.config.APIModel) +
 			"Select project type (use arrow keys and enter):\n\n" +
 			options + "\n" +
 			renderErrors(m.errors)
 			
+	case StateSelectInputDir:
+		var dirList string
+		maxEntries := 15 // Maximum number of entries to show
+		startIndex := 0
+		
+		// If there are many entries, center the selected one
+		if len(m.dirEntries) > maxEntries && m.selectedDir > maxEntries/2 {
+			startIndex = m.selectedDir - maxEntries/2
+			if startIndex + maxEntries > len(m.dirEntries) {
+				startIndex = len(m.dirEntries) - maxEntries
+			}
+			if startIndex < 0 {
+				startIndex = 0
+			}
+		}
+		
+		endIndex := startIndex + maxEntries
+		if endIndex > len(m.dirEntries) {
+			endIndex = len(m.dirEntries)
+		}
+		
+		// Add current path information
+		dirList += infoStyle.Render("Current directory: " + m.inputDir) + "\n\n"
+		
+		// Add directory entries
+		for i := startIndex; i < endIndex; i++ {
+			entry := m.dirEntries[i]
+			name := entry.Name()
+			
+			// Add indicator for directories
+			if entry.IsDir() {
+				name += "/"
+			}
+			
+			if i == m.selectedDir {
+				dirList += selectedStyle.Render("› " + name) + "\n"
+			} else {
+				dirList += "  " + name + "\n"
+			}
+		}
+		
+		// Show indication if more entries are available
+		if len(m.dirEntries) > endIndex {
+			dirList += "  ... " + fmt.Sprintf("(%d more)", len(m.dirEntries) - endIndex) + "\n"
+		}
+		
+		// Add instructions
+		dirList += "\n" + infoStyle.Render("Navigate with arrow keys, press Enter to select or enter a directory, Esc for manual input")
+		
+		return titleStyle.Render(title) + "\n\n" +
+			"Select input directory:\n\n" +
+			dirList + "\n\n" +
+			renderErrors(m.errors)
+			
 	case StateEnterInputDir:
-		return titleStyle.Render("Structura - DeepSeek Documentation Generator") + "\n\n" +
+		return titleStyle.Render(title) + "\n\n" +
 			"Enter the input directory path: " + m.inputDir + "\n\n" +
 			renderErrors(m.errors)
 			
 	case StateEnterOutputDir:
-		return titleStyle.Render("Structura - DeepSeek Documentation Generator") + "\n\n" +
+		return titleStyle.Render(title) + "\n\n" +
 			"Enter the output directory path: " + m.outputDir + "\n\n" +
 			renderErrors(m.errors)
 			
 	case StateProcessing:
 		progress := fmt.Sprintf("Processing %d/%d files", m.processedFiles, len(m.files))
 		
-		return titleStyle.Render("Structura - DeepSeek Documentation Generator") + "\n\n" +
+		apiTypeStr := string(m.config.APIType)
+		return titleStyle.Render(title) + "\n\n" +
+			infoStyle.Render(fmt.Sprintf("API: %s / %s", apiTypeStr, m.config.APIModel)) + "\n" +
 			infoStyle.Render("Processing files from: " + m.inputDir) + "\n" +
 			infoStyle.Render("Saving documentation to: " + m.outputDir) + "\n" +
 			infoStyle.Render("Project type: " + string(m.projectType)) + "\n\n" +
@@ -346,8 +600,9 @@ func (m Model) View() string {
 			renderErrors(m.errors)
 			
 	case StateDone:
-		return titleStyle.Render("Structura - DeepSeek Documentation Generator") + "\n\n" +
-			infoStyle.Render(fmt.Sprintf("✓ Done! Processed %d files", m.processedFiles)) + "\n" +
+		apiTypeStr := string(m.config.APIType)
+		return titleStyle.Render(title) + "\n\n" +
+			infoStyle.Render(fmt.Sprintf("✓ Done! Processed %d files using %s", m.processedFiles, apiTypeStr)) + "\n" +
 			infoStyle.Render("Documentation saved to: " + m.outputDir) + "\n" +
 			infoStyle.Render("Project structure documentation: " + filepath.Join(m.outputDir, "PROJECT_STRUCTURE.md")) + "\n" +
 			infoStyle.Render("Project setup documentation: " + filepath.Join(m.outputDir, "PROJECT_SETUP.md")) + "\n\n" +
@@ -462,6 +717,49 @@ func renderErrors(errors []string) string {
 	
 	return result
 }
+
+// loadDirectoryEntries loads directory entries for the given path
+func (m *Model) loadDirectoryEntries(path string) error {
+	entries, err := os.ReadDir(path)
+	if err != nil {
+		return err
+	}
+	
+	// Filter to show only directories first, then files
+	var dirs []os.DirEntry
+	var files []os.DirEntry
+	
+	for _, entry := range entries {
+		if entry.IsDir() {
+			dirs = append(dirs, entry)
+		} else {
+			files = append(files, entry)
+		}
+	}
+	
+	// Add special "parent directory" entry if not at root
+	if path != "/" {
+		parentEntry := &dirEntry{name: "..", isDir: true}
+		dirs = append([]os.DirEntry{parentEntry}, dirs...)
+	}
+	
+	// Combine directories and files
+	m.dirEntries = append(dirs, files...)
+	m.selectedDir = 0
+	
+	return nil
+}
+
+// Custom DirEntry implementation for special entries like ".."
+type dirEntry struct {
+	name  string
+	isDir bool
+}
+
+func (d *dirEntry) Name() string               { return d.name }
+func (d *dirEntry) IsDir() bool                { return d.isDir }
+func (d *dirEntry) Type() os.FileMode          { return os.ModeDir }
+func (d *dirEntry) Info() (os.FileInfo, error) { return nil, nil }
 
 // generateStructureDocumentation creates documentation for the project structure and setup
 func (m Model) generateStructureDocumentation() {

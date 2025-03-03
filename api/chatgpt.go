@@ -10,27 +10,27 @@ import (
 	"time"
 )
 
-// DeepseekClient is a client for the DeepSeek API
-type DeepseekClient struct {
+// ChatGPTClient is a client for the OpenAI ChatGPT API
+type ChatGPTClient struct {
 	Config      *config.Config
 	Client      *resty.Client
 	lastAPICall time.Time
 }
 
-// DeepseekMessage represents a message in the DeepSeek API request
-type DeepseekMessage struct {
+// ChatGPTMessage represents a message in the ChatGPT API request
+type ChatGPTMessage struct {
 	Role    string `json:"role"`
 	Content string `json:"content"`
 }
 
-// DeepseekRequest represents the structure of a request to DeepSeek API
-type DeepseekRequest struct {
-	Model    string            `json:"model"`
-	Messages []DeepseekMessage `json:"messages"`
+// ChatGPTRequest represents the structure of a request to ChatGPT API
+type ChatGPTRequest struct {
+	Model    string           `json:"model"`
+	Messages []ChatGPTMessage `json:"messages"`
 }
 
-// DeepseekResponse represents the structure of a response from DeepSeek API
-type DeepseekResponse struct {
+// ChatGPTResponse represents the structure of a response from ChatGPT API
+type ChatGPTResponse struct {
 	ID      string `json:"id"`
 	Object  string `json:"object"`
 	Created int64  `json:"created"`
@@ -44,56 +44,42 @@ type DeepseekResponse struct {
 	} `json:"choices"`
 }
 
-// NewDeepseekClient creates a new DeepSeek API client
-func NewDeepseekClient(cfg *config.Config) *DeepseekClient {
+// NewChatGPTClient creates a new ChatGPT API client
+func NewChatGPTClient(cfg *config.Config) *ChatGPTClient {
 	client := resty.New()
 	client.SetHeader("Content-Type", "application/json")
-	client.SetHeader("Authorization", fmt.Sprintf("Bearer %s", cfg.DeepseekAPIKey))
+	client.SetHeader("Authorization", fmt.Sprintf("Bearer %s", cfg.OpenAIAPIKey))
 
-	return &DeepseekClient{
+	return &ChatGPTClient{
 		Config:      cfg,
 		Client:      client,
 		lastAPICall: time.Now().Add(-cfg.APIRateLimit), // Initialize to allow immediate first call
 	}
 }
 
-// APIError represents a structured API error
-type APIError struct {
-	StatusCode int
-	Message    string
-	IsRateLimit bool
-	IsInvalidKey bool
-	IsNetworkError bool
-	RawResponse string
-}
-
-func (e *APIError) Error() string {
-	return e.Message
-}
-
 // enforceRateLimit ensures the API rate limit is respected
-func (dc *DeepseekClient) enforceRateLimit() {
-	elapsed := time.Since(dc.lastAPICall)
-	if elapsed < dc.Config.APIRateLimit {
+func (cc *ChatGPTClient) enforceRateLimit() {
+	elapsed := time.Since(cc.lastAPICall)
+	if elapsed < cc.Config.APIRateLimit {
 		// Wait for the remaining time
-		time.Sleep(dc.Config.APIRateLimit - elapsed)
+		time.Sleep(cc.Config.APIRateLimit - elapsed)
 	}
-	dc.lastAPICall = time.Now()
+	cc.lastAPICall = time.Now()
 }
 
 // makeAPIRequest makes an API request with rate limiting and retries
-func (dc *DeepseekClient) makeAPIRequest(req interface{}) (*resty.Response, error) {
+func (cc *ChatGPTClient) makeAPIRequest(req interface{}) (*resty.Response, error) {
 	var lastErr error
 	var resp *resty.Response
 
-	for attempt := 0; attempt < dc.Config.MaxRetries; attempt++ {
+	for attempt := 0; attempt < cc.Config.MaxRetries; attempt++ {
 		// Enforce rate limit before making the request
-		dc.enforceRateLimit()
+		cc.enforceRateLimit()
 
 		// Make the request
-		resp, err := dc.Client.R().
+		resp, err := cc.Client.R().
 			SetBody(req).
-			Post(dc.Config.DeepseekEndpoint)
+			Post(cc.Config.OpenAIEndpoint)
 
 		if err == nil {
 			// Handle successful response
@@ -121,7 +107,7 @@ func (dc *DeepseekClient) makeAPIRequest(req interface{}) (*resty.Response, erro
 				apiErr.IsRateLimit = true
 				lastErr = apiErr
 				// Wait longer before retrying rate limit errors
-				time.Sleep(time.Duration(attempt+1) * dc.Config.APIRateLimit)
+				time.Sleep(time.Duration(attempt+1) * cc.Config.APIRateLimit)
 				continue
 			default:
 				apiErr.Message = fmt.Sprintf("API request failed with status: %d, body: %s", resp.StatusCode(), resp.String())
@@ -136,7 +122,7 @@ func (dc *DeepseekClient) makeAPIRequest(req interface{}) (*resty.Response, erro
 		}
 
 		// Exponential backoff for retries
-		if attempt < dc.Config.MaxRetries-1 {
+		if attempt < cc.Config.MaxRetries-1 {
 			time.Sleep(time.Duration(1<<uint(attempt)) * time.Second)
 		}
 	}
@@ -145,18 +131,18 @@ func (dc *DeepseekClient) makeAPIRequest(req interface{}) (*resty.Response, erro
 		return nil, lastErr
 	}
 
-	return resp, fmt.Errorf("API request failed after %d attempts", dc.Config.MaxRetries)
+	return resp, fmt.Errorf("API request failed after %d attempts", cc.Config.MaxRetries)
 }
 
-// GenerateDocumentation generates documentation for a file using DeepSeek API
-func (dc *DeepseekClient) GenerateDocumentation(file filehandler.FileInfo) (string, error) {
-	if dc.Config.DeepseekAPIKey == "" {
-		return "", errors.New("DeepSeek API key is not set")
+// GenerateDocumentation generates documentation for a file using ChatGPT API
+func (cc *ChatGPTClient) GenerateDocumentation(file filehandler.FileInfo) (string, error) {
+	if cc.Config.OpenAIAPIKey == "" {
+		return "", errors.New("OpenAI API key is not set")
 	}
 
 	// Get project type from the config
 	projectType := "generic"
-	if fileHandler, ok := dc.Config.FileHandler.(*filehandler.FileHandler); ok && fileHandler != nil {
+	if fileHandler, ok := cc.Config.FileHandler.(*filehandler.FileHandler); ok && fileHandler != nil {
 		projectType = string(fileHandler.ProjectType)
 	}
 
@@ -184,9 +170,9 @@ func (dc *DeepseekClient) GenerateDocumentation(file filehandler.FileInfo) (stri
 	)
 
 	// Create the request
-	req := DeepseekRequest{
-		Model: dc.Config.APIModel,
-		Messages: []DeepseekMessage{
+	req := ChatGPTRequest{
+		Model: cc.Config.OpenAIModel,
+		Messages: []ChatGPTMessage{
 			{
 				Role:    "user",
 				Content: prompt,
@@ -195,7 +181,7 @@ func (dc *DeepseekClient) GenerateDocumentation(file filehandler.FileInfo) (stri
 	}
 
 	// Make the request with rate limiting and retries
-	resp, err := dc.makeAPIRequest(req)
+	resp, err := cc.makeAPIRequest(req)
 	if err != nil {
 		// Provide more user-friendly errors based on error type
 		if apiErr, ok := err.(*APIError); ok {
@@ -213,15 +199,15 @@ func (dc *DeepseekClient) GenerateDocumentation(file filehandler.FileInfo) (stri
 	}
 
 	// Parse the response
-	var deepseekResp DeepseekResponse
-	err = json.Unmarshal(resp.Body(), &deepseekResp)
+	var chatGPTResp ChatGPTResponse
+	err = json.Unmarshal(resp.Body(), &chatGPTResp)
 	if err != nil {
 		return "", fmt.Errorf("failed to parse API response: %w", err)
 	}
 
-	if len(deepseekResp.Choices) == 0 {
+	if len(chatGPTResp.Choices) == 0 {
 		return "", errors.New("API response contains no choices")
 	}
 
-	return deepseekResp.Choices[0].Message.Content, nil
+	return chatGPTResp.Choices[0].Message.Content, nil
 }

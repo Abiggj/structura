@@ -1,11 +1,25 @@
 package config
 
-import "time"
+import (
+	"github.com/Abiggj/structura/api"
+	"time"
+)
 
 // Config holds the application configuration
 type Config struct {
+	// API Configuration
+	APIType        api.APIType
+	APIModel       string
 	DeepseekAPIKey string
-	APIEndpoint    string
+	OpenAIAPIKey   string
+	GeminiAPIKey   string
+	
+	// API Endpoints
+	DeepseekEndpoint string
+	OpenAIEndpoint   string
+	GeminiEndpoint   string
+	
+	// Common Config
 	FileHandler    interface{}
 	APIRateLimit   time.Duration // Duration to wait between API calls
 	MaxRetries     int           // Maximum number of retries for failed API calls
@@ -14,10 +28,45 @@ type Config struct {
 // NewConfig creates a new configuration
 func NewConfig() *Config {
 	return &Config{
-		DeepseekAPIKey: "", // Set this from environment variable or config file
-		APIEndpoint:    "https://api.deepseek.com/chat/completions", // Updated to correct endpoint
+		// Default API settings
+		APIType:        api.APITypeDeepseek,
+		APIModel:       "deepseek-chat",
+		DeepseekAPIKey: "",
+		OpenAIAPIKey:   "",
+		GeminiAPIKey:   "",
+		
+		// API Endpoints
+		DeepseekEndpoint: "https://api.deepseek.com/chat/completions",
+		OpenAIEndpoint:   "https://api.openai.com/v1/chat/completions",
+		GeminiEndpoint:   "https://generativelanguage.googleapis.com/v1/models/gemini-pro:generateContent",
+		
+		// Common Config
 		FileHandler:    nil,
 		APIRateLimit:   time.Second * 1, // Default: 1 second between API calls
 		MaxRetries:     3,               // Default: retry 3 times
+	}
+}
+
+// GetActiveEndpoint returns the API endpoint for the currently selected API type
+func (c *Config) GetActiveEndpoint() string {
+	switch c.APIType {
+	case api.APITypeChatGPT:
+		return c.OpenAIEndpoint
+	case api.APITypeGemini:
+		return c.GeminiEndpoint
+	default:
+		return c.DeepseekEndpoint
+	}
+}
+
+// GetActiveAPIKey returns the API key for the currently selected API type
+func (c *Config) GetActiveAPIKey() string {
+	switch c.APIType {
+	case api.APITypeChatGPT:
+		return c.OpenAIAPIKey
+	case api.APITypeGemini:
+		return c.GeminiAPIKey
+	default:
+		return c.DeepseekAPIKey
 	}
 }
