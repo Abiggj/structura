@@ -256,9 +256,14 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		progress := float64(m.processedFiles) / float64(len(m.files))
 		if m.processedFiles >= len(m.files) {
 			m.state = StateDone
+			return m, m.progress.SetPercent(progress)
 		}
 		
-		return m, m.progress.SetPercent(progress)
+		// Continue processing the next file
+		return m, tea.Batch(
+			m.progress.SetPercent(progress),
+			continueProcessing(filesLoadedMsg{files: m.files}, m),
+		)
 		
 	case fileErrorMsg:
 		m.errors = append(m.errors, string(msg))
@@ -267,13 +272,19 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		progress := float64(m.processedFiles) / float64(len(m.files))
 		if m.processedFiles >= len(m.files) {
 			m.state = StateDone
+			return m, m.progress.SetPercent(progress)
 		}
 		
-		return m, m.progress.SetPercent(progress)
+		// Continue processing the next file
+		return m, tea.Batch(
+			m.progress.SetPercent(progress),
+			continueProcessing(filesLoadedMsg{files: m.files}, m),
+		)
 		
 	case filesLoadedMsg:
 		m.files = msg.files
-		return m, nil
+		// Start processing files
+		return m, continueProcessing(msg, m)
 	}
 
 	return m, nil
@@ -348,51 +359,70 @@ func (m Model) processFiles() tea.Msg {
 		return fileErrorMsg(fmt.Sprintf("Failed to traverse directory: %s", err))
 	}
 	
-	// Update the model with the files
-	tea.NewProgram(m).Send(filesLoadedMsg{files: files})
-	
-	// Process each file
-	for _, file := range files {
-		if file.IsDir {
-			continue
-		}
-		
-		// Generate documentation
-		doc, err := m.apiClient.GenerateDocumentation(file)
-		if err != nil {
-			tea.NewProgram(m).Send(fileErrorMsg(fmt.Sprintf("Failed to generate documentation for %s: %s", file.Path, err)))
-			continue
-		}
-		
-		// Create relative path for output
-		relPath, err := filepath.Rel(m.inputDir, file.Path)
-		if err != nil {
-			tea.NewProgram(m).Send(fileErrorMsg(fmt.Sprintf("Failed to get relative path for %s: %s", file.Path, err)))
-			continue
-		}
-		
-		// Create output directory
-		outputPath := filepath.Join(m.outputDir, filepath.Dir(relPath))
-		if err := os.MkdirAll(outputPath, 0755); err != nil {
-			tea.NewProgram(m).Send(fileErrorMsg(fmt.Sprintf("Failed to create directory %s: %s", outputPath, err)))
-			continue
-		}
-		
-		// Write documentation to file
-		outputFile := filepath.Join(outputPath, filepath.Base(file.Path)+".md")
-		if err := os.WriteFile(outputFile, []byte(doc), 0644); err != nil {
-			tea.NewProgram(m).Send(fileErrorMsg(fmt.Sprintf("Failed to write documentation to %s: %s", outputFile, err)))
-			continue
-		}
-		
-		// Update the progress
-		tea.NewProgram(m).Send(fileProcessedMsg(file.Path))
-		
-		// Sleep for a short time to avoid API rate limiting
-		time.Sleep(100 * time.Millisecond)
+	// Return the files loaded message first
+	return filesLoadedMsg{files: files}
+}
+
+// continueProcessing continues processing after files are loaded
+func continueProcessing(msg tea.Msg, m Model) tea.Cmd {
+	filesMsg, ok := msg.(filesLoadedMsg)
+	if !ok {
+		return nil
 	}
 	
-	return nil
+	files := filesMsg.files
+	
+	// Process only one file at a time, so we can update the UI
+	return func() tea.Msg {
+		// Find the next file to process
+		for i, file := range files {
+			if i < m.processedFiles {
+				continue // Skip already processed files
+			}
+			
+			if file.IsDir {
+				m.processedFiles++
+				continue
+			}
+			
+			// Update current file
+			currentFile := file.Path
+			
+			// Generate documentation
+			doc, err := m.apiClient.GenerateDocumentation(file)
+			if err != nil {
+				return fileErrorMsg(fmt.Sprintf("Failed to generate documentation for %s: %s", file.Path, err))
+			}
+			
+			// Create relative path for output
+			relPath, err := filepath.Rel(m.inputDir, file.Path)
+			if err != nil {
+				return fileErrorMsg(fmt.Sprintf("Failed to get relative path for %s: %s", file.Path, err))
+			}
+			
+			// Create output directory
+			outputPath := filepath.Join(m.outputDir, filepath.Dir(relPath))
+			if err := os.MkdirAll(outputPath, 0755); err != nil {
+				return fileErrorMsg(fmt.Sprintf("Failed to create directory %s: %s", outputPath, err))
+			}
+			
+			// Write documentation to file
+			outputFile := filepath.Join(outputPath, filepath.Base(file.Path)+".md")
+			if err := os.WriteFile(outputFile, []byte(doc), 0644); err != nil {
+				return fileErrorMsg(fmt.Sprintf("Failed to write documentation to %s: %s", outputFile, err))
+			}
+			
+			// Return a file processed message
+			return fileProcessedMsg(currentFile)
+		}
+		
+		// If we've processed all files, return nil
+		if m.processedFiles >= len(files) {
+			return nil
+		}
+		
+		return nil
+	}
 }
 
 // Message types
