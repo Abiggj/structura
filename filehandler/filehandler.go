@@ -49,6 +49,8 @@ func NewFileHandler() *FileHandler {
 			".DS_Store", "*.lock", "*.log", "*.wasm", "*.min.js",
 			"*.min.css", "*.map", "*.ico", "*.svg", "*.png", "*.jpg",
 			"*.jpeg", "*.gif", "*.webp", "*.ttf", "*.woff", "*.woff2",
+			".env", "*.env", ".env.*", "*.yml", "*.yaml", "*.toml", "*.ini",
+			"*.config", "*.conf", "Dockerfile", "docker-compose.yml",
 		},
 		ProjectType: ProjectTypeGeneric,
 	}
@@ -67,6 +69,8 @@ func (fh *FileHandler) SetProjectType(projectType ProjectType) {
 		".DS_Store", "*.lock", "*.log", "*.wasm", "*.min.js",
 		"*.min.css", "*.map", "*.ico", "*.svg", "*.png", "*.jpg",
 		"*.jpeg", "*.gif", "*.webp", "*.ttf", "*.woff", "*.woff2",
+		".env", "*.env", ".env.*", "*.yml", "*.yaml", "*.toml", "*.ini",
+		"*.config", "*.conf", "Dockerfile", "docker-compose.yml",
 	}
 	
 	// Add project-specific ignore rules
