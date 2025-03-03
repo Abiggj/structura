@@ -84,7 +84,7 @@ func (dc *DeepseekClient) GenerateDocumentation(file filehandler.FileInfo) (stri
 
 	// Create the request
 	req := DeepseekRequest{
-		Model: "deepseek-coder",
+		Model: "deepseek-coder-v2",
 		Messages: []DeepseekMessage{
 			{
 				Role:    "user",
