@@ -292,7 +292,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				}
 				return m, nil
 			case "enter":
-				// If a directory is selected, navigate into it
+				// Navigate into the selected directory
 				if m.selectedDir < len(m.dirEntries) && m.dirEntries[m.selectedDir].IsDir() {
 					entry := m.dirEntries[m.selectedDir]
 					
@@ -308,17 +308,20 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 						m.inputDir = newPath
 						m.dirHistory = append(m.dirHistory, newPath)
 					}
-					
+			
 					// Reload directory entries
 					if err := m.loadDirectoryEntries(m.inputDir); err != nil {
 						m.errors = append(m.errors, fmt.Sprintf("Error loading directory: %s", err))
 					}
 					return m, nil
-				} else {
-					// If not a directory, confirm this directory as the input dir
-					m.state = StateEnterOutputDir
 				}
 				return m, nil
+			
+			case " ":
+				// Select the current directory
+				m.state = StateEnterOutputDir
+				return m, nil
+			
 			case "escape":
 				// Switch to manual entry mode
 				m.state = StateEnterInputDir
